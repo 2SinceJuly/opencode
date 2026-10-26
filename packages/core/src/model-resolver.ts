@@ -417,19 +417,11 @@ export const layer = Layer.effect(
     })
     return Service.of({
       resolve: Effect.fn("ModelResolver.resolve")(function* (requested) {
+        // The default model is the only fallback. Picking a model from another provider here would run the prompt
+        // somewhere the user did not configure, which is what happens when their default provider was dropped.
         const selected = requested
           ? yield* models.get(requested.providerID, requested.id)
-          : yield* models
-              .default()
-              .pipe(
-                Effect.flatMap((model) =>
-                  model && hasPackage(model)
-                    ? Effect.succeed(model)
-                    : Effect.map(models.available(), (models) =>
-                        models.find((model) => hasPackage(model) && Model.supportsText(model)),
-                      ),
-                ),
-              )
+          : yield* models.default().pipe(Effect.map((model) => (model && hasPackage(model) ? model : undefined)))
         if (!selected) return undefined
         return yield* load(selected, requested?.variant)
       }),

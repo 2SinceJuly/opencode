@@ -271,7 +271,11 @@ const layer = Layer.effect(
       default: Effect.fn("Model.default")(function* () {
         const value = yield* read()
         const requested = value.data.defaultModel
-        const model = requested && value.byProvider.get(requested.providerID)?.get(requested.modelID)
+        if (!requested) return value.available.find(supportsText)
+        // A configured provider the catalog never registered, such as an entry the schema rejected, must not fall
+        // back to another provider: that would send the prompt somewhere the user did not choose.
+        if (!input?.records.has(requested.providerID)) return undefined
+        const model = value.byProvider.get(requested.providerID)?.get(requested.modelID)
         return model?.enabled ? model : value.available.find(supportsText)
       }),
       small: Effect.fn("Model.small")(function* (providerID) {
