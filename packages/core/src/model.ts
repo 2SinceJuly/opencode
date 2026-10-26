@@ -76,6 +76,8 @@ export interface Interface extends State.Transformable<Editor> {
   readonly all: () => Effect.Effect<readonly Info[]>
   readonly available: () => Effect.Effect<readonly Info[]>
   readonly default: () => Effect.Effect<Info | undefined>
+  /** The default model the configuration names for this Location, whether or not the catalog has it. */
+  readonly configuredDefault: () => Effect.Effect<{ readonly providerID: Provider.ID; readonly modelID: ID } | undefined>
   readonly small: (providerID: Provider.ID) => Effect.Effect<Info | undefined>
 }
 
@@ -278,6 +280,9 @@ const layer = Layer.effect(
         const model = value.byProvider.get(requested.providerID)?.get(requested.modelID)
         return model?.enabled ? model : value.available.find(supportsText)
       }),
+      configuredDefault: Effect.fn("Model.configuredDefault")(() =>
+        read().pipe(Effect.map((value) => value.data.defaultModel)),
+      ),
       small: Effect.fn("Model.small")(function* (providerID) {
         const value = yield* read()
         const models = value.available.filter(

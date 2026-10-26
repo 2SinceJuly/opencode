@@ -417,22 +417,25 @@ export const layer = Layer.effect(
     })
     return Service.of({
       resolve: Effect.fn("ModelResolver.resolve")(function* (requested) {
-        // The default model is the only fallback. Picking a model from another provider here would run the prompt
-        // somewhere the user did not configure, which is what happens when their default provider was dropped.
-        const selected = requested
-          ? yield* models.get(requested.providerID, requested.id)
-          : yield* models.default().pipe(
-              Effect.flatMap((model) => {
-                if (model === undefined) return Effect.succeed(undefined)
-                if (hasPackage(model)) return Effect.succeed(model)
-                // No model is configured, so prefer the first text model that can actually be loaded.
-                return Effect.map(models.available(), (available) =>
-                  available.find((model) => hasPackage(model) && Model.supportsText(model)),
-                )
-              }),
-            )
+        if (requested) {
+          const selected = yield* models.get(requested.providerID, requested.id)
+          if (!selected) return undefined
+          return yield* load(selected, requested.variant)
+        }
+        const model = yield* models.default()
+        // A configured default is used as it is, so a model without a package fails the same way `--model` does
+        // instead of running on another provider. Only an unconfigured default may pick a loadable model.
+        const configured = yield* models.configuredDefault()
+        if (configured) {
+          if (!model) return undefined
+          return yield* load(model)
+        }
+        const selected =
+          model && hasPackage(model)
+            ? model
+            : (yield* models.available()).find((model) => hasPackage(model) && Model.supportsText(model))
         if (!selected) return undefined
-        return yield* load(selected, requested?.variant)
+        return yield* load(selected)
       }),
       resolveModel: load,
     })
