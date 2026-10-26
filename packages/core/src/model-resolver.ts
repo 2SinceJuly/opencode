@@ -421,7 +421,16 @@ export const layer = Layer.effect(
         // somewhere the user did not configure, which is what happens when their default provider was dropped.
         const selected = requested
           ? yield* models.get(requested.providerID, requested.id)
-          : yield* models.default().pipe(Effect.map((model) => (model && hasPackage(model) ? model : undefined)))
+          : yield* models.default().pipe(
+              Effect.flatMap((model) => {
+                if (model === undefined) return Effect.succeed(undefined)
+                if (hasPackage(model)) return Effect.succeed(model)
+                // No model is configured, so prefer the first text model that can actually be loaded.
+                return Effect.map(models.available(), (available) =>
+                  available.find((model) => hasPackage(model) && Model.supportsText(model)),
+                )
+              }),
+            )
         if (!selected) return undefined
         return yield* load(selected, requested?.variant)
       }),
