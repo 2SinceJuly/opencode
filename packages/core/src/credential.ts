@@ -355,7 +355,8 @@ const layer = Layer.effect(
         // cached remote config until the source is removed. Drop the source so every credential caller, not just
         // the HTTP handler, drops the config with the last credential.
         if (!removed.integrationID || (yield* list(removed.integrationID)).length) return
-        if (!wellknown.snapshot().some((entry) => entry.integrationID === removed.integrationID)) return
+        // The persisted source list, not the loaded cache, so this also holds before config has loaded the sources.
+        if (!(yield* wellknown.has(removed.integrationID))) return
         yield* wellknown.remove(removed.integrationID)
       }),
     })

@@ -834,6 +834,7 @@ describe("Config", () => {
               WellKnown.Service.of({
                 entries: () => Effect.succeed([entry]),
                 snapshot: () => [entry],
+                has: () => Effect.succeed(false),
                 refresh: () => Effect.succeed(false),
                 add: () => Effect.die("unused Wellknown.add"),
                 remove: () => Effect.die("unused Wellknown.remove"),
@@ -1079,6 +1080,7 @@ describe("Config", () => {
               WellKnown.Service.of({
                 entries: () => Effect.succeed([entry]),
                 snapshot: () => [entry],
+                has: () => Effect.succeed(false),
                 refresh: () => Effect.succeed(false),
                 add: () => Effect.die("unused Wellknown.add"),
                 remove: () => Effect.die("unused Wellknown.remove"),

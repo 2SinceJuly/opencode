@@ -23,13 +23,10 @@ const itWithSource = testEffect(
     replacements: [
       WellKnown.node.replace(
         Layer.mock(WellKnown.Service, {
-          snapshot: () => [
-            {
-              origin: "https://wellknown.test",
-              integrationID: Integration.ID.make("https://wellknown.test"),
-              manifest: {},
-            },
-          ],
+          // Deliberately empty: the cleanup must not depend on the loaded cache.
+          snapshot: () => [],
+          has: (integrationID: Integration.ID) =>
+            Effect.succeed(integrationID === Integration.ID.make("https://wellknown.test")),
           remove: (origin: string) =>
             Effect.sync(() => {
               sourceRemovals.push(origin)
@@ -299,6 +296,10 @@ describe("Credential", () => {
       const credentials = yield* Credential.Service
       const integrationID = Integration.ID.make("https://wellknown.test")
       const value = Credential.Key.make({ type: "key", key: "secret" })
+      const other = yield* credentials.create({ integrationID: Integration.ID.make("openai"), value })
+      yield* credentials.remove(other.id)
+      expect(sourceRemovals).toEqual([])
+
       const first = yield* credentials.create({ integrationID, value })
       const second = yield* credentials.create({ integrationID, value })
 
