@@ -1,5 +1,4 @@
 import { Credential } from "@opencode/core/credential"
-import { WellKnown } from "@opencode/core/wellknown"
 import { ConflictError } from "@opencode/protocol/errors"
 import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/http-api"
@@ -48,15 +47,7 @@ export const CredentialHandler = HttpApiBuilder.group(Api, "server.credential", 
       "credential.remove",
       Effect.fn(function* (ctx) {
         const credential = yield* Credential.Service
-        const wellknown = yield* WellKnown.Service
-        const removed = yield* credential.get(ctx.params.credentialID)
         yield* credential.remove(ctx.params.credentialID)
-        // A well-known source with no credential left cannot authenticate, and the config loader keeps its last
-        // cached remote config until the source is removed. Drop the source so logout also drops its config.
-        if (!removed || (yield* credential.list(removed.integrationID)).length) return HttpApiSchema.NoContent.make()
-        if (!wellknown.snapshot().some((entry) => entry.integrationID === removed.integrationID))
-          return HttpApiSchema.NoContent.make()
-        yield* wellknown.remove(removed.integrationID)
         return HttpApiSchema.NoContent.make()
       }),
     ),
