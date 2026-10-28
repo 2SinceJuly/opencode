@@ -83,10 +83,14 @@ const Manifest = Schema.fromJsonString(
   Schema.Struct({ name: Schema.optional(Schema.Unknown), exports: Schema.optional(Schema.Unknown) }),
 )
 
-// A package.json that is not a JSON object counts as missing, so one broken plugin directory never stops the rest
-// from resolving: it falls back to the conventional root file names.
+// A package.json that cannot be read or is not a JSON object counts as missing, so one broken plugin directory
+// never stops the rest from resolving: it falls back to the conventional root file names.
 function packageManifest(directory: string) {
   const file = path.join(directory, "package.json")
   if (!existsSync(file)) return undefined
-  return Option.getOrUndefined(Schema.decodeUnknownOption(Manifest)(readFileSync(file, "utf8")))
+  try {
+    return Option.getOrUndefined(Schema.decodeUnknownOption(Manifest)(readFileSync(file, "utf8")))
+  } catch {
+    return undefined
+  }
 }
