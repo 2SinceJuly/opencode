@@ -12,6 +12,10 @@ export const fileTabPath = (file: Files, id: string) => file.resolve(`file:${id}
 
 export const isFileTab = (id: string) => id.startsWith("//")
 
+/** A launcher tab id. `crypto.randomUUID` only exists in secure contexts, so the web UI served over plain HTTP uses this. */
+export const randomTabId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("")
+
 /** The file:// URL the browser pane loads for a workspace file. */
 export const workspaceFileUrl = (root: string, path: string) =>
   pathToFileUrl(`${root.replaceAll("\\", "/").replace(/\/+$/, "")}/${path}`)

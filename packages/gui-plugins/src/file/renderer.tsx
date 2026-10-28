@@ -44,7 +44,7 @@ import {
 } from "@opencode/plugin/gui/file"
 import type File from "./index"
 import { FileVisual } from "./label"
-import { fileTabId, fileTabPath, isFileTab, workspaceFileUrl } from "./path"
+import { fileTabId, fileTabPath, isFileTab, randomTabId, workspaceFileUrl } from "./path"
 import tabStyles from "./tabs.css?inline"
 import { onIdle, BuiltinPanel, BuiltinSlot, type BuiltinPanelTab } from "@opencode/plugin/gui/builtin"
 import { Browser } from "@opencode/plugin/gui/browser"
@@ -167,7 +167,7 @@ const setup: Plugin.Setup<typeof File> = (ctx) => {
 
       if (selected || layout.narrow())
         layout.open(`file:${selected ?? OPEN}`, session, { tab: "preview", background: options?.background })
-      else layout.open(`file:${OPEN}:${crypto.randomUUID()}`, session, { tab: "select" })
+      else layout.open(`file:${OPEN}:${randomTabId()}`, session, { tab: "select" })
 
       if (!options?.background && layout.narrow() && !layout.side.opened(session)) layout.side.toggle(session)
     })
