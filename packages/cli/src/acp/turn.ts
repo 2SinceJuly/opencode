@@ -41,6 +41,11 @@ export const CancelDrainTimeout = Context.Reference<Duration.Input>("@opencode/c
   defaultValue: () => "5 seconds",
 })
 
+/** `session/wait` answers on its own request and can beat the event stream, so an idle turn drains first. */
+export const IdleDrainTimeout = Context.Reference<Duration.Input>("@opencode/cli/acp/Turn/IdleDrainTimeout", {
+  defaultValue: () => "1 second",
+})
+
 type Subscription = {
   readonly scope: Scope.Closeable
   readonly events: Queue.Dequeue<OpenCodeEvent, unknown>
@@ -65,6 +70,7 @@ export const make = Effect.fnUntraced(function* (input: {
 }) {
   const scope = yield* Effect.scope
   const drainTimeout = yield* CancelDrainTimeout
+  const idleDrainTimeout = yield* IdleDrainTimeout
   const turns = yield* FiberMap.make<string, PromptResponse, ACPError.Failure>()
 
   const open = Effect.fnUntraced(function* (ctx: ACPTranslate.TurnContext, state: Ref.Ref<ACPTranslate.TurnState>) {
@@ -209,6 +215,29 @@ export const make = Effect.fnUntraced(function* (input: {
     return yield* fold(turn, yield* take(turn.subscription))
   })
 
+  const settleIdle = Effect.fnUntraced(function* (turn: Turn) {
+    // `session/wait` resolves on its own request, so the events that end the turn can still be in
+    // flight when it reports idle. Read until one of them arrives or the stream goes quiet.
+    while (true) {
+      const next = yield* take(turn.subscription).pipe(Effect.timeoutOption(idleDrainTimeout))
+      if (Option.isNone(next)) break
+      const folded = yield* fold(turn, next.value)
+      if (!folded.terminal) continue
+      yield* asksSettled(turn.subscription)
+      return folded.terminal
+    }
+    // Nothing ever said how the turn ended: a failed durable write dropped the outcome. Report it
+    // rather than completing the prompt as if the turn had succeeded.
+    yield* Ref.update(turn.state, (state) => ({
+      ...state,
+      executionError: state.executionError ?? {
+        type: "session.outcome-lost",
+        message: "The session went idle before it reported how the turn ended",
+      },
+    }))
+    return "failed" as const
+  })
+
   const consume = Effect.fnUntraced(function* (turn: Turn) {
     const delivered = yield* Deferred.make<void>()
     const idle = yield* Deferred.make<void>()
@@ -225,11 +254,11 @@ export const make = Effect.fnUntraced(function* (input: {
     )
     while (true) {
       const next = yield* Effect.raceFirst(
-        take(turn.subscription).pipe(Effect.map((event) => ({ event }))),
-        Deferred.await(idle).pipe(Effect.as(undefined)),
+        take(turn.subscription).pipe(Effect.map((event) => Option.some(event))),
+        Deferred.await(idle).pipe(Effect.as(Option.none<OpenCodeEvent>())),
       )
-      if (!next) return "failed" as const
-      const folded = yield* fold(turn, next.event)
+      if (Option.isNone(next)) return yield* settleIdle(turn)
+      const folded = yield* fold(turn, next.value)
       if (folded.state.started) yield* Deferred.succeed(delivered, undefined)
       if (folded.terminal) {
         yield* asksSettled(turn.subscription)
