@@ -193,8 +193,7 @@ export const make = Effect.fnUntraced(function* (input: {
     }
   }
 
-  const advance = Effect.fnUntraced(function* (turn: Turn) {
-    const event = yield* take(turn.subscription)
+  const fold = Effect.fnUntraced(function* (turn: Turn, event: OpenCodeEvent) {
     const folded = yield* Ref.modify(turn.state, (current) => {
       const next =
         turn.background && !ACPTranslate.fromTrackedChild(current, event)
@@ -206,9 +205,32 @@ export const make = Effect.fnUntraced(function* (input: {
     return folded
   })
 
+  const advance = Effect.fnUntraced(function* (turn: Turn) {
+    return yield* fold(turn, yield* take(turn.subscription))
+  })
+
   const consume = Effect.fnUntraced(function* (turn: Turn) {
+    const delivered = yield* Deferred.make<void>()
+    const idle = yield* Deferred.make<void>()
+    // A failed durable write can drop the outcome event, and the turn would wait for it forever.
+    // `session.wait` resolves through `awaitIdle`, so an idle session ends the turn either way.
+    yield* Deferred.await(delivered).pipe(
+      Effect.andThen(input.client.experimental.session.wait({ sessionID: turn.ctx.sessionID })),
+      Effect.tapCause((cause) =>
+        Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP session wait failed", cause),
+      ),
+      Effect.flatMap(() => Deferred.succeed(idle, undefined)),
+      Effect.catchCause(() => Effect.void),
+      Effect.forkScoped,
+    )
     while (true) {
-      const folded = yield* advance(turn)
+      const next = yield* Effect.raceFirst(
+        take(turn.subscription).pipe(Effect.map((event) => ({ event }))),
+        Deferred.await(idle).pipe(Effect.as(undefined)),
+      )
+      if (!next) return "failed" as const
+      const folded = yield* fold(turn, next.event)
+      if (folded.state.started) yield* Deferred.succeed(delivered, undefined)
       if (folded.terminal) {
         yield* asksSettled(turn.subscription)
         return folded.terminal
